@@ -41,6 +41,26 @@
     });
   }
 
+  function readExcelAsValues(file){
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onerror = () => reject(new Error("Falha ao ler arquivo Excel."));
+      r.onload = () => {
+        try {
+          const data = new Uint8Array(r.result);
+          const wb = XLSX.read(data, { type: "array" });
+          const sheetName = wb.SheetNames[0];
+          const ws = wb.Sheets[sheetName];
+          const values = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
+          resolve(values);
+        } catch (err) {
+          reject(new Error("Falha ao interpretar Excel."));
+        }
+      };
+      r.readAsArrayBuffer(file);
+    });
+  }
+
   function renderPreview(preview){
     const table = el("previewTable");
     table.innerHTML = "";
@@ -135,7 +155,20 @@
       "Preparando preview…"
     ]);
 
-    const base64 = await readFileAsBase64(file);
+    const isExcel = file.name.toLowerCase().endsWith(".xls") || file.name.toLowerCase().endsWith(".xlsx");
+    const payload = {
+      name: file.name,
+      mime: file.type,
+      size: file.size,
+    };
+
+    if (isExcel) {
+      payload.values = await readExcelAsValues(file);
+      payload.sourceType = file.name.toLowerCase().endsWith(".xls") ? "XLS" : "XLSX";
+    } else {
+      payload.base64 = await readFileAsBase64(file);
+    }
+
     return new Promise((resolve, reject) => {
       google.script.run
         .withSuccessHandler((res) => {
@@ -148,12 +181,7 @@
           showProgress(false);
           reject(new Error(err?.message || err));
         })
-        .api_ingestFile({
-          name: file.name,
-          mime: file.type,
-          size: file.size,
-          base64,
-        });
+        .api_ingestFile(payload);
     });
   }
 

@@ -42,7 +42,7 @@ function api_getBoot() {
  * INGEST FILE
  * ========================= */
 function api_ingestFile(payload) {
-  if (!payload?.base64 || !payload?.name) {
+  if (!payload?.name || (!payload?.base64 && !payload?.values)) {
     throw new Error("Arquivo inválido.");
   }
 
@@ -50,19 +50,21 @@ function api_ingestFile(payload) {
 
   const fileName = String(payload.name);
   const mime = String(payload.mime || "");
-  const bytes = Utilities.base64Decode(payload.base64);
 
   let values;
   let meta = {};
 
   try {
-    if (isCsv_(fileName, mime)) {
+    if (payload.values && Array.isArray(payload.values)) {
+      values = payload.values;
+      meta.sourceType = String(payload.sourceType || "XLSX");
+    } else if (isCsv_(fileName, mime)) {
+      const bytes = Utilities.base64Decode(payload.base64);
       const text = Utilities.newBlob(bytes).getDataAsString("UTF-8");
       values = Utilities.parseCsv(text);
       meta.sourceType = "CSV";
-
     } else if (isExcel_(fileName, mime)) {
-      throw new Error("Formato Excel não suportado sem Drive API. Use CSV.");
+      throw new Error("Formato Excel inválido no upload. Recarregue o arquivo.");
     } else {
       throw new Error("Formato não suportado. Use CSV.");
     }
