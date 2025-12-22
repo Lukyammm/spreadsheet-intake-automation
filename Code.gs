@@ -7,7 +7,6 @@
 const APP = {
   CONFIG_SHEET_NAME: "CONFIG",
   LOG_SHEET_NAME: "LOG_IMPORT",
-  TEMP_FOLDER_NAME: "SheetIntake_TempUploads",
   MAX_CELLS_PER_WRITE: 50000,
 };
 
@@ -34,6 +33,7 @@ function api_getBoot() {
     ok: true,
     rules: loadRules_(),
     prefs: getUserPrefs_(),
+    sheets: getBaseSheets_(),
     ts: new Date().toISOString(),
   };
 }
@@ -42,7 +42,7 @@ function api_getBoot() {
  * INGEST FILE
  * ========================= */
 function api_ingestFile(payload) {
-  if (!payload?.base64 || !payload?.name) {
+  if (!payload?.name || (!payload?.base64 && !payload?.values)) {
     throw new Error("Arquivo inválido.");
   }
 
@@ -50,30 +50,21 @@ function api_ingestFile(payload) {
 
   const fileName = String(payload.name);
   const mime = String(payload.mime || "");
-  const bytes = Utilities.base64Decode(payload.base64);
-
-  const folder = getOrCreateTempFolder_();
-  const blob = Utilities.newBlob(bytes, mime || "application/octet-stream", fileName);
-  const tempFile = folder.createFile(blob);
 
   let values;
-  let meta = { tempFileId: tempFile.getId() };
+  let meta = {};
 
   try {
-    if (isCsv_(fileName, mime)) {
+    if (payload.values && Array.isArray(payload.values)) {
+      values = payload.values;
+      meta.sourceType = String(payload.sourceType || "XLSX");
+    } else if (isCsv_(fileName, mime)) {
+      const bytes = Utilities.base64Decode(payload.base64);
       const text = Utilities.newBlob(bytes).getDataAsString("UTF-8");
       values = Utilities.parseCsv(text);
       meta.sourceType = "CSV";
-
     } else if (isExcel_(fileName, mime)) {
-      const convertedId = convertExcelToGoogleSheet_(tempFile.getId(), fileName);
-      const ss = SpreadsheetApp.openById(convertedId);
-      const sheet = ss.getSheets()[0];
-      values = sheet.getDataRange().getValues();
-
-      meta.sourceType = fileName.toLowerCase().endsWith(".xls") ? "XLS" : "XLSX";
-      meta.convertedSpreadsheetId = convertedId;
-
+      throw new Error("Formato Excel inválido no upload. Recarregue o arquivo.");
     } else {
       throw new Error("Formato não suportado. Use CSV, XLS ou XLSX.");
     }
@@ -106,18 +97,12 @@ function api_commitImport(req) {
   let values = standardizeValues_(req.values, req.standardize || {});
 
   const route = req.route;
-  const ss = route.targetSpreadsheetId
-    ? SpreadsheetApp.openById(route.targetSpreadsheetId)
-    : SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   let sh = ss.getSheetByName(route.targetSheetName);
 
   if (!sh) {
-    if (route.createIfMissing) {
-      sh = ss.insertSheet(route.targetSheetName);
-    } else {
-      throw new Error("Aba destino não existe.");
-    }
+    throw new Error("Aba destino não existe.");
   }
 
   if (route.mode === "REPLACE") {
@@ -169,22 +154,6 @@ function isExcel_(name, mime) {
     n.endsWith(".xlsx") ||
     (mime && (mime.includes("excel") || mime.includes("spreadsheetml")))
   );
-}
-
-/* =========================
- * EXCEL → GOOGLE SHEETS
- * =========================
- * REQUER:
- * - Advanced Google Services → Drive API ON
- * - Google Cloud → Drive API ON
- */
-function convertExcelToGoogleSheet_(fileId, fileName) {
-  const resource = {
-    title: fileName.replace(/\.[^.]+$/, ""),
-    mimeType: "application/vnd.google-apps.spreadsheet",
-  };
-  const converted = Drive.Files.copy(resource, fileId);
-  return converted.id;
 }
 
 /* =========================
@@ -301,10 +270,8 @@ function suggestRoute_(fileName, values) {
         match: best.key,
         score,
         route: {
-          targetSpreadsheetId: best.targetSpreadsheetId,
           targetSheetName: best.targetSheet,
           mode: best.mode,
-          createIfMissing: true,
         }
       }
     : { match: "default", score: 0 };
@@ -321,12 +288,16 @@ function ensureBootstrap_() {
 }
 
 /* =========================
- * TEMP / PREFS / LOG
+ * BASE SHEETS
  * ========================= */
-function getOrCreateTempFolder_() {
-  const it = DriveApp.getFoldersByName(APP.TEMP_FOLDER_NAME);
-  return it.hasNext() ? it.next() : DriveApp.createFolder(APP.TEMP_FOLDER_NAME);
+function getBaseSheets_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  return ss.getSheets().map(sh => sh.getName());
 }
+
+/* =========================
+ * PREFS / LOG
+ * ========================= */
 
 function getUserPrefs_() {
   const raw = PropertiesService.getUserProperties().getProperty("prefs");

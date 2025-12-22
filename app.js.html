@@ -41,6 +41,26 @@
     });
   }
 
+  function readExcelAsValues(file){
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onerror = () => reject(new Error("Falha ao ler arquivo Excel."));
+      r.onload = () => {
+        try {
+          const data = new Uint8Array(r.result);
+          const wb = XLSX.read(data, { type: "array" });
+          const sheetName = wb.SheetNames[0];
+          const ws = wb.Sheets[sheetName];
+          const values = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
+          resolve(values);
+        } catch (err) {
+          reject(new Error("Falha ao interpretar Excel."));
+        }
+      };
+      r.readAsArrayBuffer(file);
+    });
+  }
+
   function renderPreview(preview){
     const table = el("previewTable");
     table.innerHTML = "";
@@ -69,13 +89,39 @@
     table.appendChild(tbody);
   }
 
+  function setSheetOptions(sheets){
+    const select = el("sheetName");
+    select.innerHTML = "";
+    if (!sheets.length){
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "Nenhuma aba encontrada";
+      select.appendChild(opt);
+      select.disabled = true;
+      return;
+    }
+
+    sheets.forEach(name => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      select.appendChild(opt);
+    });
+    select.disabled = false;
+  }
+
+  function selectSheetName(name){
+    const select = el("sheetName");
+    if (!select.options.length) return;
+    const found = Array.from(select.options).some(opt => opt.value === name);
+    select.value = found ? name : select.options[0].value;
+  }
+
   function applySuggestion(sug){
     if (!sug || !sug.route) return;
     el("matchBadge").textContent = `Match: ${sug.match} • score ${sug.score}`;
-    el("ssid").value = sug.route.targetSpreadsheetId || "";
-    el("sheetName").value = sug.route.targetSheetName || "";
+    selectSheetName(sug.route.targetSheetName || "");
     el("mode").value = sug.route.mode || "APPEND";
-    el("createIfMissing").checked = !!sug.route.createIfMissing;
   }
 
   function applyPrefs(prefs){
@@ -94,10 +140,8 @@
       el("microNote").textContent = "Preferências carregadas (padronização).";
     }
     if (route){
-      el("ssid").value = route.targetSpreadsheetId || "";
-      el("sheetName").value = route.targetSheetName || "";
+      selectSheetName(route.targetSheetName || "");
       el("mode").value = route.mode || "APPEND";
-      el("createIfMissing").checked = !!route.createIfMissing;
       el("microNote").textContent = "Preferências carregadas (rota + padronização).";
     }
   }
@@ -111,7 +155,20 @@
       "Preparando preview…"
     ]);
 
-    const base64 = await readFileAsBase64(file);
+    const isExcel = file.name.toLowerCase().endsWith(".xls") || file.name.toLowerCase().endsWith(".xlsx");
+    const payload = {
+      name: file.name,
+      mime: file.type,
+      size: file.size,
+    };
+
+    if (isExcel) {
+      payload.values = await readExcelAsValues(file);
+      payload.sourceType = file.name.toLowerCase().endsWith(".xls") ? "XLS" : "XLSX";
+    } else {
+      payload.base64 = await readFileAsBase64(file);
+    }
+
     return new Promise((resolve, reject) => {
       google.script.run
         .withSuccessHandler((res) => {
@@ -124,12 +181,7 @@
           showProgress(false);
           reject(new Error(err?.message || err));
         })
-        .api_ingestFile({
-          name: file.name,
-          mime: file.type,
-          size: file.size,
-          base64,
-        });
+        .api_ingestFile(payload);
     });
   }
 
@@ -147,10 +199,9 @@
 
   function collectRoute(){
     return {
-      targetSpreadsheetId: el("ssid").value.trim(),
-      targetSheetName: el("sheetName").value.trim() || "BASE",
+      targetSheetName: el("sheetName").value || "BASE",
       mode: el("mode").value,
-      createIfMissing: el("createIfMissing").checked,
+      createIfMissing: false,
     };
   }
 
@@ -287,6 +338,7 @@
       .withSuccessHandler((res) => {
         state.boot = res;
         setStatus("Online ✅");
+        setSheetOptions(res.sheets || []);
         // Se o usuário já marcou “não perguntar”, aplica prefs automático
         applyPrefs(res.prefs);
       })

@@ -5,6 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <?!= include_("styles"); ?>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   </head>
   <body>
     <div class="app">
@@ -49,11 +50,8 @@
           </div>
 
           <div class="form">
-            <label class="label">Spreadsheet destino</label>
-            <input class="input" id="ssid" placeholder="ID da planilha (vazio = planilha atual)" />
-
             <label class="label">Aba destino</label>
-            <input class="input" id="sheetName" placeholder="Ex: BASE_INTERNACAO" />
+            <select class="input" id="sheetName"></select>
 
             <div class="row2">
               <div>
@@ -61,12 +59,7 @@
                 <select class="input" id="mode">
                   <option value="APPEND">Acrescentar (append)</option>
                   <option value="REPLACE">Substituir (replace)</option>
-                  <option value="CREATE_SHEET">Criar aba nova</option>
                 </select>
-              </div>
-              <div class="toggle">
-                <input type="checkbox" id="createIfMissing" checked />
-                <label for="createIfMissing">Criar aba se não existir</label>
               </div>
             </div>
 
