@@ -314,7 +314,7 @@
 
     stopFake();
     showProgress(true, 100, `Importado: ${res.wrote.rows}x${res.wrote.cols}`);
-    setStatus("Pronto ✅");
+    setStatus("Pronto");
     el("microNote").textContent = `Escreveu em ${res.target.sheetName} • ${res.tookMs}ms`;
   }
 
@@ -403,7 +403,7 @@
     google.script.run
       .withSuccessHandler((res) => {
         state.boot = res;
-        setStatus("Online ✅");
+        setStatus("Online");
         setSheetOptions(res.sheets || []);
         applyPrefs(res.prefs);
       })
