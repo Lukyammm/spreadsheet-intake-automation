@@ -6,54 +6,93 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <?!= include_("styles"); ?>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   </head>
   <body>
-    <div class="app">
-      <header class="topbar">
-        <div class="brand">
-          <div class="logo">S</div>
-          <div class="brandText">
-            <div class="title">Sheet Intake</div>
-            <div class="subtitle">Upload → Padroniza → Joga na Base</div>
-          </div>
-        </div>
+    <div class="app-shell">
+      <div class="bg-orb bg-orb-a" aria-hidden="true"></div>
+      <div class="bg-orb bg-orb-b" aria-hidden="true"></div>
 
-        <div class="statusPill" id="statusPill">Inicializando…</div>
-      </header>
-
-      <main class="grid">
-        <section class="card drop" id="dropzone">
-          <div class="dropInner">
-            <div class="dropIcon">⇪</div>
-            <div class="dropTitle">Arraste sua planilha aqui</div>
-            <div class="dropHint">CSV, XLS ou XLSX • Interface decente • Zero drama</div>
-            <div class="row">
-              <button class="btn" id="pickBtn">Escolher arquivo</button>
-              <input type="file" id="fileInput" accept=".csv,.xls,.xlsx" hidden />
-              <button class="btn ghost" id="demoBtn">Usar demo</button>
-            </div>
-
-            <div class="progressWrap" id="progressWrap" style="display:none;">
-              <div class="progressBar"><div class="progressFill" id="progressFill"></div></div>
-              <div class="progressMeta" id="progressMeta">Lendo arquivo…</div>
+      <div class="app">
+        <header class="topbar card">
+          <div class="brand">
+            <div class="logo">S</div>
+            <div class="brandText">
+              <h1 class="title">Sheet Intake</h1>
+              <p class="subtitle">Upload → Padroniza → Joga na Base</p>
             </div>
           </div>
-        </section>
 
-        <section class="card">
-          <div class="cardHeader">
-            <div>
-              <div class="cardTitle">Destino inteligente</div>
-              <div class="cardSub">Detecta “Internacao”, “Visitante”, etc. e sugere a base</div>
+          <div class="statusPill" id="statusPill">Inicializando…</div>
+        </header>
+
+        <main class="layout-grid">
+          <section class="card metrics-section">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">Resumo</p>
+                <h2 class="section-title">Métricas rápidas</h2>
+              </div>
             </div>
-            <span class="badge" id="matchBadge">—</span>
-          </div>
 
-          <div class="form">
-            <label class="label">Aba destino</label>
-            <select class="input" id="sheetName"></select>
+            <div class="metrics-grid">
+              <article class="metric-card metric-neutral">
+                <p class="metric-label">Arquivo</p>
+                <p class="metric-value" id="metricFile">—</p>
+              </article>
+              <article class="metric-card metric-success">
+                <p class="metric-label">Linhas</p>
+                <p class="metric-value" id="metricRows">0</p>
+              </article>
+              <article class="metric-card metric-warning">
+                <p class="metric-label">Colunas</p>
+                <p class="metric-value" id="metricCols">0</p>
+              </article>
+              <article class="metric-card metric-primary">
+                <p class="metric-label">Score</p>
+                <p class="metric-value" id="metricScore">0</p>
+              </article>
+            </div>
 
-            <div class="row2">
+            <div class="chart-wrap">
+              <canvas id="previewChart" aria-label="Prévia de distribuição" role="img"></canvas>
+            </div>
+          </section>
+
+          <section class="card drop" id="dropzone">
+            <div class="dropInner">
+              <div class="dropIcon">⇪</div>
+              <h2 class="dropTitle">Arraste sua planilha aqui</h2>
+              <p class="dropHint">CSV, XLS ou XLSX • Interface moderna • Zero drama</p>
+              <div class="row">
+                <button class="btn btn-secondary" id="pickBtn">Escolher arquivo</button>
+                <input type="file" id="fileInput" accept=".csv,.xls,.xlsx" hidden />
+                <button class="btn btn-secondary" id="demoBtn">Usar demo</button>
+              </div>
+
+              <div class="progressWrap is-hidden" id="progressWrap">
+                <div class="progressBar"><div class="progressFill" id="progressFill"></div></div>
+                <div class="progressMeta" id="progressMeta">Lendo arquivo…</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">Configuração</p>
+                <h2 class="section-title">Destino inteligente</h2>
+                <p class="section-sub">Detecta “Internacao”, “Visitante”, etc. e sugere a base.</p>
+              </div>
+              <span class="badge" id="matchBadge">—</span>
+            </div>
+
+            <div class="form-grid">
+              <div>
+                <label class="label">Aba destino</label>
+                <select class="input" id="sheetName"></select>
+              </div>
+
               <div>
                 <label class="label">Modo</label>
                 <select class="input" id="mode">
@@ -65,50 +104,54 @@
 
             <div class="divider"></div>
 
-            <div class="cardTitle">Padronização</div>
-            <div class="row3">
-              <label class="check"><input type="checkbox" id="trimCells" checked /> Tirar espaços (trim)</label>
-              <label class="check"><input type="checkbox" id="removeEmptyRows" checked /> Remover linhas vazias</label>
-              <label class="check"><input type="checkbox" id="removeEmptyCols" checked /> Remover colunas vazias</label>
-              <label class="check"><input type="checkbox" id="normalizeHeaders" checked /> Normalizar cabeçalho</label>
-              <label class="check"><input type="checkbox" id="dedupeHeaders" checked /> Evitar cabeçalho duplicado</label>
-              <label class="check"><input type="checkbox" id="numberCoerce" /> Converter números</label>
-              <label class="check"><input type="checkbox" id="dateCoerce" /> Converter datas (dd/mm/aaaa)</label>
+            <div>
+              <p class="eyebrow">Qualidade de dados</p>
+              <h3 class="section-title section-title-sm">Padronização</h3>
+              <div class="filter-chips">
+                <label class="check-chip"><input type="checkbox" id="trimCells" checked /><span>Tirar espaços (trim)</span></label>
+                <label class="check-chip"><input type="checkbox" id="removeEmptyRows" checked /><span>Remover linhas vazias</span></label>
+                <label class="check-chip"><input type="checkbox" id="removeEmptyCols" checked /><span>Remover colunas vazias</span></label>
+                <label class="check-chip"><input type="checkbox" id="normalizeHeaders" checked /><span>Normalizar cabeçalho</span></label>
+                <label class="check-chip"><input type="checkbox" id="dedupeHeaders" checked /><span>Evitar cabeçalho duplicado</span></label>
+                <label class="check-chip"><input type="checkbox" id="numberCoerce" /><span>Converter números</span></label>
+                <label class="check-chip"><input type="checkbox" id="dateCoerce" /><span>Converter datas (dd/mm/aaaa)</span></label>
+              </div>
             </div>
 
             <div class="divider"></div>
 
-            <div class="row2">
+            <div class="actions-grid">
               <label class="check subtle">
                 <input type="checkbox" id="dontAskAgain" />
                 ( ) não perguntar novamente (salvar preferências)
               </label>
 
-              <button class="btn primary" id="importBtn" disabled>Importar agora</button>
+              <button class="btn btn-primary" id="importBtn" disabled>Importar agora</button>
             </div>
 
             <div class="micro" id="microNote">—</div>
-          </div>
-        </section>
+          </section>
 
-        <section class="card wide">
-          <div class="cardHeader">
-            <div>
-              <div class="cardTitle">Preview</div>
-              <div class="cardSub">Mostra só um pedaço pra não explodir a quota</div>
+          <section class="card wide">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">Dados</p>
+                <h2 class="section-title">Preview</h2>
+                <p class="section-sub">Mostra só um pedaço para não explodir a quota.</p>
+              </div>
+              <button class="btn btn-secondary" id="copyJsonBtn" disabled>Copiar JSON</button>
             </div>
-            <button class="btn ghost" id="copyJsonBtn" disabled>Copiar JSON</button>
-          </div>
 
-          <div class="tableWrap">
-            <table class="table" id="previewTable"></table>
-          </div>
-        </section>
-      </main>
+            <div class="tableWrap">
+              <table class="table" id="previewTable"></table>
+            </div>
+          </section>
+        </main>
 
-      <footer class="footer">
-        <span class="muted">Config em aba <b>CONFIG</b>. Log em <b>LOG_IMPORT</b>. Preferências por usuário.</span>
-      </footer>
+        <footer class="footer card">
+          <span class="muted">Config em aba <b>CONFIG</b>. Log em <b>LOG_IMPORT</b>. Preferências por usuário.</span>
+        </footer>
+      </div>
     </div>
 
     <?!= include_("app.js"); ?>

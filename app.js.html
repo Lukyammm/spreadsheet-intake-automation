@@ -5,26 +5,32 @@
     boot: null,
     lastIngest: null,
     values: null,
+    chart: null,
   };
 
   function setStatus(txt){ el("statusPill").textContent = txt; }
 
-  function showProgress(show, pct=0, label=""){
-    el("progressWrap").style.display = show ? "block" : "none";
+  function showProgress(show, pct = 0, label = ""){
+    const progress = el("progressWrap");
+    progress.classList.toggle("is-hidden", !show);
     el("progressFill").style.width = `${pct}%`;
     el("progressMeta").textContent = label || "Processando…";
   }
 
   function fakeProgress(sequence){
-    let i = 0, pct = 0;
+    let i = 0;
+    let pct = 0;
     showProgress(true, 0, sequence[0] || "Iniciando…");
     const t = setInterval(() => {
       pct = Math.min(92, pct + Math.random() * 12);
-      const label = sequence[Math.min(sequence.length-1, Math.floor(i/2))] || "Processando…";
+      const label = sequence[Math.min(sequence.length - 1, Math.floor(i / 2))] || "Processando…";
       showProgress(true, pct, label);
       i++;
     }, 220);
-    return () => { clearInterval(t); showProgress(true, 100, "Finalizando…"); };
+    return () => {
+      clearInterval(t);
+      showProgress(true, 100, "Finalizando…");
+    };
   }
 
   function readFileAsBase64(file){
@@ -32,7 +38,6 @@
       const r = new FileReader();
       r.onerror = () => reject(new Error("Falha ao ler arquivo."));
       r.onload = () => {
-        // DataURL -> base64
         const res = String(r.result || "");
         const base64 = res.split(",")[1] || "";
         resolve(base64);
@@ -68,7 +73,7 @@
 
     const thead = document.createElement("thead");
     const trh = document.createElement("tr");
-    preview.header.forEach(h => {
+    preview.header.forEach((h) => {
       const th = document.createElement("th");
       th.textContent = h;
       trh.appendChild(th);
@@ -77,9 +82,9 @@
     table.appendChild(thead);
 
     const tbody = document.createElement("tbody");
-    (preview.rows || []).forEach(row => {
+    (preview.rows || []).forEach((row) => {
       const tr = document.createElement("tr");
-      row.forEach(cell => {
+      row.forEach((cell) => {
         const td = document.createElement("td");
         td.textContent = (cell === null || cell === undefined) ? "" : String(cell);
         tr.appendChild(td);
@@ -87,6 +92,58 @@
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);
+  }
+
+  function renderMetrics(res){
+    const fullValues = res?.preview?.fullValues || [];
+    const fileName = res?.file?.name || "—";
+    const rows = Math.max(0, fullValues.length - 1);
+    const cols = fullValues[0]?.length || 0;
+    const score = res?.suggestion?.score || 0;
+
+    el("metricFile").textContent = fileName;
+    el("metricRows").textContent = String(rows);
+    el("metricCols").textContent = String(cols);
+    el("metricScore").textContent = String(score);
+  }
+
+  function renderChart(preview){
+    const canvas = el("previewChart");
+    const rows = preview?.rows || [];
+    const labels = rows.map((_, idx) => `Linha ${idx + 1}`);
+    const sizes = rows.map((r) => r.filter((c) => String(c ?? "").trim() !== "").length);
+
+    if (state.chart) state.chart.destroy();
+
+    const css = getComputedStyle(document.documentElement);
+    const colorPrimary = css.getPropertyValue("--color-primary").trim();
+    const colorPrimarySoft = css.getPropertyValue("--color-primary-soft").trim();
+    const colorMuted = css.getPropertyValue("--color-muted").trim();
+
+    state.chart = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: labels.length ? labels : ["Sem dados"],
+        datasets: [{
+          label: "Células preenchidas",
+          data: sizes.length ? sizes : [0],
+          borderColor: colorPrimary,
+          backgroundColor: colorPrimarySoft,
+          tension: 0.35,
+          fill: true,
+          pointRadius: 3,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: colorPrimarySoft }, ticks: { color: colorMuted } },
+          y: { beginAtZero: true, grid: { color: colorPrimarySoft }, ticks: { color: colorMuted } },
+        },
+      },
+    });
   }
 
   function setSheetOptions(sheets){
@@ -101,7 +158,7 @@
       return;
     }
 
-    sheets.forEach(name => {
+    sheets.forEach((name) => {
       const opt = document.createElement("option");
       opt.value = name;
       opt.textContent = name;
@@ -113,7 +170,7 @@
   function selectSheetName(name){
     const select = el("sheetName");
     if (!select.options.length) return;
-    const found = Array.from(select.options).some(opt => opt.value === name);
+    const found = Array.from(select.options).some((opt) => opt.value === name);
     select.value = found ? name : select.options[0].value;
   }
 
@@ -262,30 +319,30 @@
 
     dz.addEventListener("dragover", (e) => {
       e.preventDefault();
-      dz.style.outline = "2px solid rgba(255,255,255,.20)";
-      dz.style.outlineOffset = "-6px";
+      dz.classList.add("is-drag");
     });
+
     dz.addEventListener("dragleave", () => {
-      dz.style.outline = "none";
+      dz.classList.remove("is-drag");
     });
+
     dz.addEventListener("drop", async (e) => {
       e.preventDefault();
-      dz.style.outline = "none";
+      dz.classList.remove("is-drag");
       const f = e.dataTransfer.files?.[0];
       if (f) await handleFile(f);
     });
 
     el("demoBtn").onclick = async () => {
-      // cria um CSV fake e manda como File
       const csv = "nome;data;valor\nJoao;22/12/2025;1.234,50\nMaria;21/12/2025;99,90\n";
-      const blob = new Blob([csv], {type:"text/csv"});
-      const f = new File([blob], "Internacao_demo.csv", {type:"text/csv"});
+      const blob = new Blob([csv], { type: "text/csv" });
+      const f = new File([blob], "Internacao_demo.csv", { type: "text/csv" });
       await handleFile(f);
     };
   }
 
   async function handleFile(file){
-    try{
+    try {
       el("importBtn").disabled = true;
       el("copyJsonBtn").disabled = true;
       setStatus("Processando upload…");
@@ -293,35 +350,22 @@
       const res = await ingest(file);
       state.lastIngest = res;
 
-      // Se vier grande, não manda tudo pro preview; mas pro commit precisamos dos values.
-      // Por simplicidade, aqui vamos reusar o preview? Não: precisamos dos values completos.
-      // Então: o backend já leu tudo; agora pedimos pro usuário confirmar e enviamos values.
-      // Como o backend não mantém estado fácil, a gente usa o truque: manter values no frontend.
-      // (Para arquivos enormes, dá pra mudar e guardar em Cache/Drive e só referenciar por id.)
-      //
-      // Aqui, vamos assumir tamanho típico hospitalar e guardar values no frontend:
-      // o res.preview é só amostra; mas precisamos do completo: o backend não mandou tudo.
-      // Então: melhorar: mandar "values" completo (com limite). Para não estourar, no backend a gente pode mandar completo.
-      // Como já está, vamos pegar do preview? (ruim)
-      // SOLUÇÃO prática agora: o backend também manda "values" completo, mas limitado por tamanho.
-      // Para manter simples sem quebrar quota: vamos simular "values = preview.fullValues" se existir.
-      //
-      // Então: por enquanto, se não vier, bloqueia commit.
-      if (res.preview?.fullValues){
+      if (res.preview?.fullValues) {
         state.values = res.preview.fullValues;
-      } else if (res.preview?.rows){
-        // fallback (não ideal)
+      } else if (res.preview?.rows) {
         state.values = [res.preview.header].concat(res.preview.rows);
       }
 
       applySuggestion(res.suggestion);
       renderPreview(res.preview);
+      renderMetrics(res);
+      renderChart(res.preview);
       setStatus("Pronto para importar");
       el("importBtn").disabled = false;
       el("copyJsonBtn").disabled = false;
       el("microNote").textContent = `Detectado: ${res.suggestion?.match || "—"} • origem: ${res.meta?.sourceType}`;
 
-    }catch(err){
+    } catch (err) {
       setStatus("Erro");
       showProgress(false);
       el("microNote").textContent = `Erro: ${err.message}`;
@@ -349,7 +393,6 @@
         state.boot = res;
         setStatus("Online ✅");
         setSheetOptions(res.sheets || []);
-        // Se o usuário já marcou “não perguntar”, aplica prefs automático
         applyPrefs(res.prefs);
       })
       .withFailureHandler((err) => {
@@ -359,7 +402,6 @@
       .api_getBoot();
   }
 
-  // Iniciar
   wireDropzone();
   wireActions();
   boot();
