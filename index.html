@@ -57,6 +57,11 @@
 
             <div class="form-grid">
               <div>
+                <label class="label">Planilha destino</label>
+                <select class="input" id="spreadsheetId"></select>
+              </div>
+
+              <div>
                 <label class="label">Aba destino</label>
                 <select class="input" id="sheetName"></select>
               </div>
@@ -68,6 +73,46 @@
                   <option value="REPLACE">Substituir (replace)</option>
                 </select>
               </div>
+            </div>
+
+            <div class="divider"></div>
+
+            <div>
+              <p class="eyebrow">Cadastro no sistema</p>
+              <h3 class="section-title section-title-sm">Planilhas e regras</h3>
+              <div class="form-grid">
+                <div>
+                  <label class="label">Nome da planilha</label>
+                  <input class="input" id="newDestinationName" placeholder="Ex.: Base Financeiro" />
+                </div>
+                <div>
+                  <label class="label">Spreadsheet ID</label>
+                  <input class="input" id="newDestinationId" placeholder="Cole o ID da URL do Google Sheets" />
+                </div>
+              </div>
+              <div class="row">
+                <button class="btn btn-secondary" id="saveDestinationBtn">Salvar planilha</button>
+                <button class="btn btn-secondary" id="removeDestinationBtn">Remover planilha selecionada</button>
+              </div>
+              <div class="micro" id="destinationNote">—</div>
+
+              <div class="divider"></div>
+
+              <div class="form-grid">
+                <div>
+                  <label class="label">Chave da regra</label>
+                  <input class="input" id="ruleKey" placeholder="Ex.: internacao" />
+                </div>
+                <div>
+                  <label class="label">Palavras-chave (;)</label>
+                  <input class="input" id="ruleKeywords" placeholder="Ex.: internacao;leito;paciente" />
+                </div>
+              </div>
+              <div class="row">
+                <button class="btn btn-secondary" id="saveRuleBtn">Salvar regra</button>
+                <button class="btn btn-secondary" id="removeRuleBtn">Remover regra</button>
+              </div>
+              <div class="micro" id="rulesNote">—</div>
             </div>
 
             <div class="divider"></div>
@@ -117,7 +162,7 @@
         </main>
 
         <footer class="footer card">
-          <span class="muted">Config em aba <b>CONFIG</b>. Log em <b>LOG_IMPORT</b>. Preferências por usuário.</span>
+          <span class="muted">Cadastro de destinos e regras salvo no sistema. Log em <b>LOG_IMPORT</b>. Preferências por usuário.</span>
         </footer>
       </div>
     </div>

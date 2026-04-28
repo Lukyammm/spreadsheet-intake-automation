@@ -5,9 +5,10 @@
  *  ========================= */
 
 const APP = {
-  CONFIG_SHEET_NAME: "CONFIG",
   LOG_SHEET_NAME: "LOG_IMPORT",
   MAX_CELLS_PER_WRITE: 50000,
+  DESTINATIONS_KEY: "destinations_v1",
+  RULES_KEY: "rules_v1",
 };
 
 /* =========================
@@ -29,13 +30,101 @@ function include_(name) {
  * ========================= */
 function api_getBoot() {
   ensureBootstrap_();
+  const destinations = getDestinations_();
+  const selectedSpreadsheetId = (destinations[0] && destinations[0].spreadsheetId) || SpreadsheetApp.getActiveSpreadsheet().getId();
+
   return {
     ok: true,
     rules: loadRules_(),
     prefs: getUserPrefs_(),
-    sheets: getBaseSheets_(),
+    destinations,
+    sheets: getSheetsBySpreadsheetId_(selectedSpreadsheetId),
     ts: new Date().toISOString(),
   };
+}
+
+function api_listSheets(spreadsheetId) {
+  if (!spreadsheetId) throw new Error("Spreadsheet ID é obrigatório.");
+  return {
+    ok: true,
+    sheets: getSheetsBySpreadsheetId_(spreadsheetId),
+  };
+}
+
+function api_saveDestination(payload) {
+  const name = String(payload?.name || "").trim();
+  const spreadsheetId = String(payload?.spreadsheetId || "").trim();
+  if (!name || !spreadsheetId) {
+    throw new Error("Nome e Spreadsheet ID são obrigatórios.");
+  }
+
+  const ss = openSpreadsheet_(spreadsheetId);
+  const destinations = getDestinations_().filter(d => d.spreadsheetId !== spreadsheetId);
+  destinations.push({
+    id: Utilities.getUuid(),
+    name,
+    spreadsheetId,
+    spreadsheetName: ss.getName(),
+  });
+  saveDestinations_(destinations);
+
+  return { ok: true, destinations };
+}
+
+function api_deleteDestination(payload) {
+  const spreadsheetId = String(payload?.spreadsheetId || "").trim();
+  if (!spreadsheetId) throw new Error("Spreadsheet ID é obrigatório.");
+
+  const destinations = getDestinations_().filter(d => d.spreadsheetId !== spreadsheetId);
+  saveDestinations_(destinations);
+
+  const rules = loadRules_().filter(r => r.targetSpreadsheetId !== spreadsheetId);
+  saveRules_(rules);
+
+  return { ok: true, destinations, rules };
+}
+
+function api_saveRule(payload) {
+  const key = String(payload?.key || "").trim();
+  const keywords = String(payload?.keywords || "")
+    .split(";")
+    .map(s => s.trim())
+    .filter(Boolean);
+  const targetSpreadsheetId = String(payload?.targetSpreadsheetId || "").trim();
+  const targetSheet = String(payload?.targetSheet || "").trim();
+  const mode = String(payload?.mode || "APPEND").toUpperCase();
+
+  if (!key || !keywords.length || !targetSpreadsheetId || !targetSheet) {
+    throw new Error("Preencha chave, palavras-chave, planilha e aba.");
+  }
+  if (!["APPEND", "REPLACE"].includes(mode)) {
+    throw new Error("Modo inválido.");
+  }
+
+  const targetSs = openSpreadsheet_(targetSpreadsheetId);
+  if (!targetSs.getSheetByName(targetSheet)) {
+    throw new Error("A aba informada não existe na planilha destino.");
+  }
+
+  const rules = loadRules_().filter(r => r.key !== key);
+  rules.push({
+    key,
+    keywords,
+    targetSpreadsheetId,
+    targetSheet,
+    mode,
+  });
+  saveRules_(rules);
+  return { ok: true, rules };
+}
+
+function api_deleteRule(payload) {
+  const key = String(payload?.key || "").trim();
+  if (!key) throw new Error("Chave da regra é obrigatória.");
+
+  const rules = loadRules_().filter(r => r.key !== key);
+  saveRules_(rules);
+  return { ok: true, rules };
 }
 
 /* =========================
@@ -53,6 +142,7 @@ function api_ingestFile(payload) {
 
   let values;
   let meta = {};
+  let inputSize = Number(payload.size || 0);
 
   try {
     if (payload.values && Array.isArray(payload.values)) {
@@ -60,6 +150,7 @@ function api_ingestFile(payload) {
       meta.sourceType = String(payload.sourceType || "XLSX");
     } else if (isCsv_(fileName, mime)) {
       const bytes = Utilities.base64Decode(payload.base64);
+      inputSize = bytes.length;
       const text = Utilities.newBlob(bytes).getDataAsString("UTF-8");
       values = Utilities.parseCsv(text);
       meta.sourceType = "CSV";
@@ -78,7 +169,7 @@ function api_ingestFile(payload) {
 
   return {
     ok: true,
-    file: { name: fileName, size: payload.size || bytes.length },
+    file: { name: fileName, size: inputSize },
     meta,
     suggestion,
     preview,
@@ -98,8 +189,9 @@ function api_commitImport(req) {
 
   const route = req.route;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  let sh = ss.getSheetByName(route.targetSheetName);
+  const targetSpreadsheetId = String(route.targetSpreadsheetId || ss.getId());
+  const targetSs = openSpreadsheet_(targetSpreadsheetId);
+  let sh = targetSs.getSheetByName(route.targetSheetName);
 
   if (!sh) {
     throw new Error("Aba destino não existe.");
@@ -124,7 +216,7 @@ function api_commitImport(req) {
     fileName: req.fileName,
     rows: values.length,
     cols: values[0].length,
-    targetSpreadsheetId: ss.getId(),
+    targetSpreadsheetId: targetSs.getId(),
     targetSheetName: sh.getName(),
     mode: route.mode,
     standardize: JSON.stringify(req.standardize || {}),
@@ -134,7 +226,7 @@ function api_commitImport(req) {
   return {
     ok: true,
     wrote: { rows: values.length, cols: values[0].length },
-    target: { spreadsheetId: ss.getId(), sheetName: sh.getName() },
+    target: { spreadsheetId: targetSs.getId(), sheetName: sh.getName() },
     tookMs: Date.now() - start,
   };
 }
@@ -229,22 +321,21 @@ function appendChunked_(sheet, values) {
  * RULES / CONFIG
  * ========================= */
 function loadRules_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sh = ss.getSheetByName(APP.CONFIG_SHEET_NAME);
-  const [head, ...rows] = sh.getDataRange().getValues();
-
-  const idx = {};
-  head.forEach((h, i) => idx[h] = i);
-
-  return rows
-    .filter(r => r[idx.KEY])
-    .map(r => ({
-      key: r[idx.KEY],
-      keywords: String(r[idx.KEYWORDS] || "").split(";").map(s => s.trim()),
-      targetSpreadsheetId: r[idx.TARGET_SPREADSHEET_ID],
-      targetSheet: r[idx.TARGET_SHEET],
-      mode: r[idx.MODE],
-    }));
+  const raw = PropertiesService.getScriptProperties().getProperty(APP.RULES_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(r => ({
+      key: String(r.key || "").trim(),
+      keywords: Array.isArray(r.keywords) ? r.keywords.map(k => String(k).trim()).filter(Boolean) : [],
+      targetSpreadsheetId: String(r.targetSpreadsheetId || "").trim(),
+      targetSheet: String(r.targetSheet || "").trim(),
+      mode: String(r.mode || "APPEND").toUpperCase(),
+    })).filter(r => r.key && r.keywords.length && r.targetSpreadsheetId && r.targetSheet);
+  } catch (e) {
+    return [];
+  }
 }
 
 function suggestRoute_(fileName, values) {
@@ -270,6 +361,7 @@ function suggestRoute_(fileName, values) {
         match: best.key,
         score,
         route: {
+          targetSpreadsheetId: best.targetSpreadsheetId,
           targetSheetName: best.targetSheet,
           mode: best.mode,
         }
@@ -282,8 +374,9 @@ function suggestRoute_(fileName, values) {
  * ========================= */
 function ensureBootstrap_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss.getSheetByName(APP.CONFIG_SHEET_NAME)) {
-    throw new Error("Planilha base não inicializada. Rode o bootstrap.");
+  if (!ss.getSheetByName(APP.LOG_SHEET_NAME)) {
+    const sh = ss.insertSheet(APP.LOG_SHEET_NAME);
+    sh.appendRow(["when", "fileName", "rows", "cols", "targetSpreadsheetId", "targetSheetName", "mode", "standardize", "ms"]);
   }
 }
 
@@ -293,6 +386,50 @@ function ensureBootstrap_() {
 function getBaseSheets_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   return ss.getSheets().map(sh => sh.getName());
+}
+
+function getSheetsBySpreadsheetId_(spreadsheetId) {
+  return openSpreadsheet_(spreadsheetId).getSheets().map(sh => sh.getName());
+}
+
+function getDestinations_() {
+  const raw = PropertiesService.getScriptProperties().getProperty(APP.DESTINATIONS_KEY);
+  if (!raw) return seedDestinations_();
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || !parsed.length) return seedDestinations_();
+    return parsed;
+  } catch (e) {
+    return seedDestinations_();
+  }
+}
+
+function saveDestinations_(destinations) {
+  PropertiesService.getScriptProperties().setProperty(APP.DESTINATIONS_KEY, JSON.stringify(destinations));
+}
+
+function saveRules_(rules) {
+  PropertiesService.getScriptProperties().setProperty(APP.RULES_KEY, JSON.stringify(rules));
+}
+
+function openSpreadsheet_(spreadsheetId) {
+  try {
+    return SpreadsheetApp.openById(spreadsheetId);
+  } catch (e) {
+    throw new Error("Não foi possível abrir a planilha destino. Verifique o ID e permissões.");
+  }
+}
+
+function seedDestinations_() {
+  const active = SpreadsheetApp.getActiveSpreadsheet();
+  const seed = [{
+    id: Utilities.getUuid(),
+    name: "Planilha atual",
+    spreadsheetId: active.getId(),
+    spreadsheetName: active.getName(),
+  }];
+  saveDestinations_(seed);
+  return seed;
 }
 
 /* =========================
