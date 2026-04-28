@@ -179,6 +179,26 @@
     select.disabled = false;
   }
 
+  function setDestinationOptions(destinations){
+    const select = el("spreadsheetId");
+    select.innerHTML = "";
+
+    (destinations || []).forEach((d) => {
+      const opt = document.createElement("option");
+      opt.value = d.spreadsheetId;
+      opt.textContent = `${d.name} (${d.spreadsheetName || d.spreadsheetId})`;
+      select.appendChild(opt);
+    });
+
+    select.disabled = !select.options.length;
+  }
+
+  function currentDestinationName(){
+    const select = el("spreadsheetId");
+    const option = select.options[select.selectedIndex];
+    return option ? option.textContent : "";
+  }
+
   function selectSheetName(name){
     const select = el("sheetName");
     if (!select.options.length) return;
@@ -186,9 +206,13 @@
     select.value = found ? name : select.options[0].value;
   }
 
-  function applySuggestion(sug){
+  async function applySuggestion(sug){
     if (!sug || !sug.route) return;
     el("matchBadge").textContent = `Match: ${sug.match} • score ${sug.score}`;
+    if (sug.route.targetSpreadsheetId) {
+      el("spreadsheetId").value = sug.route.targetSpreadsheetId;
+      await loadSheetsForSelectedSpreadsheet();
+    }
     selectSheetName(sug.route.targetSheetName || "");
     el("mode").value = sug.route.mode || "APPEND";
   }
@@ -209,6 +233,9 @@
       el("microNote").textContent = "Preferências carregadas (padronização).";
     }
     if (route){
+      if (route.targetSpreadsheetId) {
+        el("spreadsheetId").value = route.targetSpreadsheetId;
+      }
       selectSheetName(route.targetSheetName || "");
       el("mode").value = route.mode || "APPEND";
       el("microNote").textContent = "Preferências carregadas (rota + padronização).";
@@ -278,10 +305,23 @@
 
   function collectRoute(){
     return {
+      targetSpreadsheetId: el("spreadsheetId").value,
       targetSheetName: el("sheetName").value || "BASE",
       mode: el("mode").value,
       createIfMissing: false,
     };
+  }
+
+  async function loadSheetsForSelectedSpreadsheet(){
+    const spreadsheetId = el("spreadsheetId").value;
+    if (!spreadsheetId) return;
+    const res = await new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler((err) => reject(new Error(err?.message || err)))
+        .api_listSheets(spreadsheetId);
+    });
+    setSheetOptions(res.sheets || []);
   }
 
   async function commit(){
@@ -368,7 +408,7 @@
         state.values = [res.preview.header].concat(res.preview.rows);
       }
 
-      applySuggestion(res.suggestion);
+      await applySuggestion(res.suggestion);
       renderPreview(res.preview);
       renderMetrics(res);
       renderChart(res.preview);
@@ -387,6 +427,93 @@
 
   function wireActions(){
     el("importBtn").onclick = () => commit();
+    el("spreadsheetId").onchange = async () => {
+      try {
+        await loadSheetsForSelectedSpreadsheet();
+        el("destinationNote").textContent = `Destino selecionado: ${currentDestinationName()}`;
+      } catch (err) {
+        el("destinationNote").textContent = `Erro ao carregar abas: ${err.message}`;
+      }
+    };
+
+    el("saveDestinationBtn").onclick = async () => {
+      try {
+        const name = el("newDestinationName").value.trim();
+        const spreadsheetId = el("newDestinationId").value.trim();
+        const res = await new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler((err) => reject(new Error(err?.message || err)))
+            .api_saveDestination({ name, spreadsheetId });
+        });
+        setDestinationOptions(res.destinations || []);
+        el("spreadsheetId").value = spreadsheetId;
+        await loadSheetsForSelectedSpreadsheet();
+        el("destinationNote").textContent = "Planilha cadastrada com sucesso.";
+        el("newDestinationName").value = "";
+        el("newDestinationId").value = "";
+      } catch (err) {
+        el("destinationNote").textContent = `Erro ao salvar planilha: ${err.message}`;
+      }
+    };
+
+    el("removeDestinationBtn").onclick = async () => {
+      try {
+        const spreadsheetId = el("spreadsheetId").value;
+        const res = await new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler((err) => reject(new Error(err?.message || err)))
+            .api_deleteDestination({ spreadsheetId });
+        });
+        setDestinationOptions(res.destinations || []);
+        if (el("spreadsheetId").value) {
+          await loadSheetsForSelectedSpreadsheet();
+        } else {
+          setSheetOptions([]);
+        }
+        el("destinationNote").textContent = "Planilha removida do cadastro.";
+      } catch (err) {
+        el("destinationNote").textContent = `Erro ao remover planilha: ${err.message}`;
+      }
+    };
+
+    el("saveRuleBtn").onclick = async () => {
+      try {
+        const payload = {
+          key: el("ruleKey").value.trim(),
+          keywords: el("ruleKeywords").value.trim(),
+          targetSpreadsheetId: el("spreadsheetId").value,
+          targetSheet: el("sheetName").value,
+          mode: el("mode").value,
+        };
+        await new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler((err) => reject(new Error(err?.message || err)))
+            .api_saveRule(payload);
+        });
+        el("rulesNote").textContent = "Regra salva com sucesso.";
+      } catch (err) {
+        el("rulesNote").textContent = `Erro ao salvar regra: ${err.message}`;
+      }
+    };
+
+    el("removeRuleBtn").onclick = async () => {
+      try {
+        const key = el("ruleKey").value.trim();
+        await new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler((err) => reject(new Error(err?.message || err)))
+            .api_deleteRule({ key });
+        });
+        el("rulesNote").textContent = "Regra removida com sucesso.";
+      } catch (err) {
+        el("rulesNote").textContent = `Erro ao remover regra: ${err.message}`;
+      }
+    };
+
     el("copyJsonBtn").onclick = async () => {
       const json = JSON.stringify({
         suggestion: state.lastIngest?.suggestion,
@@ -401,11 +528,17 @@
   function boot(){
     setStatus("Carregando regras…");
     google.script.run
-      .withSuccessHandler((res) => {
+      .withSuccessHandler(async (res) => {
         state.boot = res;
         setStatus("Online");
+        setDestinationOptions(res.destinations || []);
         setSheetOptions(res.sheets || []);
+        if (res.prefs?.lastRoute?.targetSpreadsheetId) {
+          el("spreadsheetId").value = res.prefs.lastRoute.targetSpreadsheetId;
+          await loadSheetsForSelectedSpreadsheet();
+        }
         applyPrefs(res.prefs);
+        el("destinationNote").textContent = "Cadastro de planilhas carregado.";
       })
       .withFailureHandler((err) => {
         setStatus("Falha no boot");
