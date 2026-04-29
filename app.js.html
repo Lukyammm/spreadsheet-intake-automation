@@ -7,6 +7,7 @@
     rawValues: null,
     values: null,
     chart: null,
+    editingRuleKey: "",
   };
 
   function setStatus(txt){ el("statusPill").textContent = txt; }
@@ -210,6 +211,144 @@
     });
 
     select.disabled = !select.options.length;
+    renderDestinationsTable(destinations || []);
+  }
+
+  function renderDestinationsTable(destinations){
+    const table = el("destinationTable");
+    if (!table) return;
+    table.innerHTML = "";
+
+    const thead = document.createElement("thead");
+    thead.innerHTML = "<tr><th>Nome</th><th>Planilha</th><th>Ações</th></tr>";
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    (destinations || []).forEach((d) => {
+      const tr = document.createElement("tr");
+      const tdName = document.createElement("td");
+      tdName.textContent = d.name || "—";
+      const tdSheet = document.createElement("td");
+      tdSheet.textContent = d.spreadsheetName || d.spreadsheetId || "—";
+      const tdActions = document.createElement("td");
+
+      const useBtn = document.createElement("button");
+      useBtn.className = "btn btn-secondary";
+      useBtn.textContent = "Selecionar";
+      useBtn.onclick = async () => {
+        el("spreadsheetId").value = d.spreadsheetId;
+        await loadSheetsForSelectedSpreadsheet();
+        applyTargetPrefsForCurrentSelection();
+        el("destinationNote").textContent = `Destino selecionado: ${d.name}`;
+      };
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn btn-secondary";
+      delBtn.textContent = "Excluir";
+      delBtn.style.marginLeft = "8px";
+      delBtn.onclick = async () => {
+        if (!confirm(`Confirma remover a planilha "${d.name}" do cadastro?`)) return;
+        try {
+          const res = await new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler((err) => reject(new Error(err?.message || err)))
+              .api_deleteDestination({ spreadsheetId: d.spreadsheetId });
+          });
+          state.boot.destinations = res.destinations || [];
+          state.boot.rules = res.rules || [];
+          setDestinationOptions(res.destinations || []);
+          renderRulesTable(state.boot.rules);
+          if (el("spreadsheetId").value) {
+            await loadSheetsForSelectedSpreadsheet();
+          } else {
+            setSheetOptions([]);
+          }
+          el("destinationNote").textContent = "Planilha removida do cadastro.";
+        } catch (err) {
+          el("destinationNote").textContent = `Erro ao remover planilha: ${err.message}`;
+        }
+      };
+
+      tdActions.appendChild(useBtn);
+      tdActions.appendChild(delBtn);
+      tr.appendChild(tdName);
+      tr.appendChild(tdSheet);
+      tr.appendChild(tdActions);
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+  }
+
+  function renderRulesTable(rules){
+    const table = el("rulesTable");
+    if (!table) return;
+    table.innerHTML = "";
+
+    const thead = document.createElement("thead");
+    thead.innerHTML = "<tr><th>Chave</th><th>Palavras-chave</th><th>Destino</th><th>Aba</th><th>Modo</th><th>Ações</th></tr>";
+    table.appendChild(thead);
+
+    const destinationMap = {};
+    (state.boot?.destinations || []).forEach((d) => {
+      destinationMap[d.spreadsheetId] = d.name || d.spreadsheetName || d.spreadsheetId;
+    });
+
+    const tbody = document.createElement("tbody");
+    (rules || []).forEach((r) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${r.key || "—"}</td>
+        <td>${(r.keywords || []).join(";")}</td>
+        <td>${destinationMap[r.targetSpreadsheetId] || r.targetSpreadsheetId || "—"}</td>
+        <td>${r.targetSheet || "—"}</td>
+        <td>${r.mode || "APPEND"}</td>
+        <td></td>
+      `;
+      const actionsCell = tr.lastElementChild;
+
+      const editBtn = document.createElement("button");
+      editBtn.className = "btn btn-secondary";
+      editBtn.textContent = "Editar";
+      editBtn.onclick = () => {
+        state.editingRuleKey = r.key || "";
+        el("ruleKey").value = r.key || "";
+        el("ruleKeywords").value = (r.keywords || []).join(";");
+        el("spreadsheetId").value = r.targetSpreadsheetId || "";
+        loadSheetsForSelectedSpreadsheet().then(() => {
+          el("sheetName").value = r.targetSheet || "";
+          el("mode").value = r.mode || "APPEND";
+          el("rulesNote").textContent = `Editando regra: ${r.key}`;
+        });
+      };
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn btn-secondary";
+      delBtn.textContent = "Excluir";
+      delBtn.style.marginLeft = "8px";
+      delBtn.onclick = async () => {
+        if (!confirm(`Confirma remover a regra "${r.key}"?`)) return;
+        try {
+          const res = await new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler((err) => reject(new Error(err?.message || err)))
+              .api_deleteRule({ key: r.key });
+          });
+          state.boot.rules = res.rules || [];
+          renderRulesTable(state.boot.rules);
+          el("rulesNote").textContent = "Regra removida com sucesso.";
+        } catch (err) {
+          el("rulesNote").textContent = `Erro ao remover regra: ${err.message}`;
+        }
+      };
+
+      actionsCell.appendChild(editBtn);
+      actionsCell.appendChild(delBtn);
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
   }
 
   function currentDestinationName(){
@@ -510,42 +649,25 @@
     el("saveDestinationBtn").onclick = async () => {
       try {
         const name = el("newDestinationName").value.trim();
-        const spreadsheetId = el("newDestinationId").value.trim();
+        const spreadsheet = el("newDestinationUrl").value.trim();
         const res = await new Promise((resolve, reject) => {
           google.script.run
             .withSuccessHandler(resolve)
             .withFailureHandler((err) => reject(new Error(err?.message || err)))
-            .api_saveDestination({ name, spreadsheetId });
+            .api_saveDestination({ name, spreadsheet });
         });
+        state.boot.destinations = res.destinations || [];
         setDestinationOptions(res.destinations || []);
-        el("spreadsheetId").value = spreadsheetId;
+        const created = (res.destinations || []).find((d) => d.name === name);
+        if (created?.spreadsheetId) {
+          el("spreadsheetId").value = created.spreadsheetId;
+        }
         await loadSheetsForSelectedSpreadsheet();
         el("destinationNote").textContent = "Planilha cadastrada com sucesso.";
         el("newDestinationName").value = "";
-        el("newDestinationId").value = "";
+        el("newDestinationUrl").value = "";
       } catch (err) {
         el("destinationNote").textContent = `Erro ao salvar planilha: ${err.message}`;
-      }
-    };
-
-    el("removeDestinationBtn").onclick = async () => {
-      try {
-        const spreadsheetId = el("spreadsheetId").value;
-        const res = await new Promise((resolve, reject) => {
-          google.script.run
-            .withSuccessHandler(resolve)
-            .withFailureHandler((err) => reject(new Error(err?.message || err)))
-            .api_deleteDestination({ spreadsheetId });
-        });
-        setDestinationOptions(res.destinations || []);
-        if (el("spreadsheetId").value) {
-          await loadSheetsForSelectedSpreadsheet();
-        } else {
-          setSheetOptions([]);
-        }
-        el("destinationNote").textContent = "Planilha removida do cadastro.";
-      } catch (err) {
-        el("destinationNote").textContent = `Erro ao remover planilha: ${err.message}`;
       }
     };
 
@@ -558,30 +680,18 @@
           targetSheet: el("sheetName").value,
           mode: el("mode").value,
         };
-        await new Promise((resolve, reject) => {
+        const res = await new Promise((resolve, reject) => {
           google.script.run
             .withSuccessHandler(resolve)
             .withFailureHandler((err) => reject(new Error(err?.message || err)))
             .api_saveRule(payload);
         });
+        state.editingRuleKey = "";
+        state.boot.rules = res.rules || [];
+        renderRulesTable(state.boot.rules);
         el("rulesNote").textContent = "Regra salva com sucesso.";
       } catch (err) {
         el("rulesNote").textContent = `Erro ao salvar regra: ${err.message}`;
-      }
-    };
-
-    el("removeRuleBtn").onclick = async () => {
-      try {
-        const key = el("ruleKey").value.trim();
-        await new Promise((resolve, reject) => {
-          google.script.run
-            .withSuccessHandler(resolve)
-            .withFailureHandler((err) => reject(new Error(err?.message || err)))
-            .api_deleteRule({ key });
-        });
-        el("rulesNote").textContent = "Regra removida com sucesso.";
-      } catch (err) {
-        el("rulesNote").textContent = `Erro ao remover regra: ${err.message}`;
       }
     };
 
@@ -605,6 +715,7 @@
         setStatus("Online");
         setDestinationOptions(res.destinations || []);
         setSheetOptions(res.sheets || []);
+        renderRulesTable(res.rules || []);
         if (res.prefs?.lastRoute?.targetSpreadsheetId) {
           el("spreadsheetId").value = res.prefs.lastRoute.targetSpreadsheetId;
           await loadSheetsForSelectedSpreadsheet();

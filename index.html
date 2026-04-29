@@ -31,7 +31,7 @@
             <div class="dropInner">
               <div class="dropIcon">⇪</div>
               <h2 class="dropTitle">Arraste sua planilha aqui</h2>
-              <p class="dropHint">CSV, XLS ou XLSX • Interface moderna • Zero drama</p>
+              <p class="dropHint">Formatos aceitos: CSV, XLS ou XLSX.</p>
               <div class="row">
                 <button class="btn btn-secondary" id="pickBtn">Escolher arquivo</button>
                 <input type="file" id="fileInput" accept=".csv,.xls,.xlsx" hidden />
@@ -86,13 +86,15 @@
                   <input class="input" id="newDestinationName" placeholder="Ex.: Base Financeiro" />
                 </div>
                 <div>
-                  <label class="label">Spreadsheet ID</label>
-                  <input class="input" id="newDestinationId" placeholder="Cole o ID da URL do Google Sheets" />
+                  <label class="label">URL da planilha</label>
+                  <input class="input" id="newDestinationUrl" placeholder="Cole a URL completa da planilha" />
                 </div>
               </div>
               <div class="row">
                 <button class="btn btn-secondary" id="saveDestinationBtn">Salvar planilha</button>
-                <button class="btn btn-secondary" id="removeDestinationBtn">Remover planilha selecionada</button>
+              </div>
+              <div class="tableWrap">
+                <table class="table" id="destinationTable"></table>
               </div>
               <div class="micro" id="destinationNote">—</div>
 
@@ -110,7 +112,9 @@
               </div>
               <div class="row">
                 <button class="btn btn-secondary" id="saveRuleBtn">Salvar regra</button>
-                <button class="btn btn-secondary" id="removeRuleBtn">Remover regra</button>
+              </div>
+              <div class="tableWrap">
+                <table class="table" id="rulesTable"></table>
               </div>
               <div class="micro" id="rulesNote">—</div>
             </div>

@@ -10,6 +10,10 @@ const APP = {
   DESTINATIONS_KEY: "destinations_v1",
   RULES_KEY: "rules_v1",
   PREFS_KEY: "prefs_v2",
+  MODES: {
+    APPEND: "APPEND",
+    REPLACE: "REPLACE",
+  },
 };
 
 /* =========================
@@ -54,9 +58,9 @@ function api_listSheets(spreadsheetId) {
 
 function api_saveDestination(payload) {
   const name = String(payload?.name || "").trim();
-  const spreadsheetId = String(payload?.spreadsheetId || "").trim();
+  const spreadsheetId = extractSpreadsheetId_(payload?.spreadsheet || payload?.spreadsheetId || payload?.url || "");
   if (!name || !spreadsheetId) {
-    throw new Error("Nome e Spreadsheet ID são obrigatórios.");
+    throw new Error("Nome e planilha (URL ou ID) são obrigatórios.");
   }
 
   const ss = openSpreadsheet_(spreadsheetId);
@@ -93,12 +97,12 @@ function api_saveRule(payload) {
     .filter(Boolean);
   const targetSpreadsheetId = String(payload?.targetSpreadsheetId || "").trim();
   const targetSheet = String(payload?.targetSheet || "").trim();
-  const mode = String(payload?.mode || "APPEND").toUpperCase();
+  const mode = String(payload?.mode || APP.MODES.APPEND).toUpperCase();
 
   if (!key || !keywords.length || !targetSpreadsheetId || !targetSheet) {
     throw new Error("Preencha chave, palavras-chave, planilha e aba.");
   }
-  if (!["APPEND", "REPLACE"].includes(mode)) {
+  if (!Object.values(APP.MODES).includes(mode)) {
     throw new Error("Modo inválido.");
   }
 
@@ -208,7 +212,7 @@ function api_commitImport(req) {
     throw new Error("Aba destino não existe.");
   }
 
-  if (route.mode === "REPLACE") {
+  if (route.mode === APP.MODES.REPLACE) {
     sh.clearContents();
     sh.getRange(1, 1, values.length, values[0].length).setValues(values);
   } else {
@@ -225,7 +229,7 @@ function api_commitImport(req) {
     saveTargetPrefs_(route, {
       standardize: req.standardize || {},
       layout: layout || {},
-      mode: route.mode || "APPEND",
+      mode: route.mode || APP.MODES.APPEND,
     });
   }
 
@@ -412,6 +416,44 @@ function standardizeValues_(values, opt) {
     );
   }
 
+  if (opt.dedupeHeaders && v.length) {
+    const seen = {};
+    v[0] = v[0].map(h => {
+      const base = String(h || "COL").trim() || "COL";
+      seen[base] = (seen[base] || 0) + 1;
+      return seen[base] > 1 ? `${base}_${seen[base]}` : base;
+    });
+  }
+
+  if (opt.numberCoerce) {
+    v = v.map((row, rowIdx) => row.map((cell) => {
+      if (rowIdx === 0) return cell;
+      if (typeof cell === "number") return cell;
+      const raw = String(cell ?? "").trim();
+      if (!raw) return cell;
+      const normalized = raw.replace(/\./g, "").replace(",", ".");
+      if (!/^-?\d+(\.\d+)?$/.test(normalized)) return cell;
+      const n = Number(normalized);
+      return Number.isFinite(n) ? n : cell;
+    }));
+  }
+
+  if (opt.dateCoerce) {
+    v = v.map((row, rowIdx) => row.map((cell) => {
+      if (rowIdx === 0) return cell;
+      if (Object.prototype.toString.call(cell) === "[object Date]") return cell;
+      const raw = String(cell ?? "").trim();
+      const m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (!m) return cell;
+      const day = Number(m[1]);
+      const month = Number(m[2]);
+      const year = Number(m[3]);
+      const d = new Date(year, month - 1, day);
+      if (d.getFullYear() !== year || d.getMonth() !== (month - 1) || d.getDate() !== day) return cell;
+      return d;
+    }));
+  }
+
   return v;
 }
 
@@ -444,7 +486,7 @@ function loadRules_() {
       keywords: Array.isArray(r.keywords) ? r.keywords.map(k => String(k).trim()).filter(Boolean) : [],
       targetSpreadsheetId: String(r.targetSpreadsheetId || "").trim(),
       targetSheet: String(r.targetSheet || "").trim(),
-      mode: String(r.mode || "APPEND").toUpperCase(),
+      mode: String(r.mode || APP.MODES.APPEND).toUpperCase(),
     })).filter(r => r.key && r.keywords.length && r.targetSpreadsheetId && r.targetSheet);
   } catch (e) {
     return [];
@@ -525,9 +567,18 @@ function saveRules_(rules) {
   PropertiesService.getScriptProperties().setProperty(APP.RULES_KEY, JSON.stringify(rules));
 }
 
+function extractSpreadsheetId_(input) {
+  const raw = String(input || "").trim();
+  if (!raw) return "";
+  const byUrl = raw.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (byUrl && byUrl[1]) return byUrl[1];
+  return raw;
+}
+
 function openSpreadsheet_(spreadsheetId) {
+  const id = extractSpreadsheetId_(spreadsheetId);
   try {
-    return SpreadsheetApp.openById(spreadsheetId);
+    return SpreadsheetApp.openById(id);
   } catch (e) {
     throw new Error("Não foi possível abrir a planilha destino. Verifique o ID e permissões.");
   }
