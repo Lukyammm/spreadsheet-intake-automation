@@ -49,16 +49,16 @@
             <div class="section-header">
               <div>
                 <p class="eyebrow">Configuração</p>
-                <h2 class="section-title">Destino inteligente</h2>
-                <p class="section-sub">Fluxo em etapas para reduzir ruído visual.</p>
+                <h2 class="section-title">Importação guiada</h2>
+                <p class="section-sub">Menos termos técnicos, mais clareza para importar sem erro.</p>
               </div>
               <span class="badge" id="matchBadge">—</span>
             </div>
 
             <div class="panel-stack">
-              <div class="panel-block">
-                <p class="eyebrow">Etapa 1</p>
-                <h3 class="section-title section-title-sm">Destino de importação</h3>
+              <div class="panel-block flow-step flow-step-active" id="flowStep1">
+                <p class="eyebrow">Etapa 1 · Destino</p>
+                <h3 class="section-title section-title-sm">Para onde vão os dados?</h3>
                 <div class="form-grid">
                   <div>
                     <label class="label">Planilha destino</label>
@@ -130,58 +130,71 @@
                 </div>
               </details>
 
-              <details class="panel-block panel-collapsible" open>
+              <details class="panel-block panel-collapsible flow-step flow-step-muted" open id="flowStep2">
                 <summary>
                   <div>
-                    <p class="eyebrow">Etapa 2</p>
-                    <h3 class="section-title section-title-sm">Estrutura e padronização</h3>
+                    <p class="eyebrow">Etapa 2 · Arquivo</p>
+                    <h3 class="section-title section-title-sm">Arquivo e limpeza automática</h3>
                   </div>
                   <span class="summary-helper">Avançado</span>
                 </summary>
 
                 <div class="panel-content">
-                  <p class="eyebrow">Estrutura do arquivo</p>
+                  <p class="eyebrow">Arquivo (estrutura)</p>
+                  <div class="form-grid">
+                    <div>
+                      <label class="label">Seu arquivo tem cabeçalho?</label>
+                      <select class="input" id="hasHeader">
+                        <option value="yes" selected>Sim</option>
+                        <option value="no">Não</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div id="structureDetails">
                   <div class="filter-chips">
                     <label class="check-chip">
                       <input type="checkbox" id="autoLayout" checked />
-                      <span>Detectar automaticamente cabeçalho e coluna inicial</span>
+                      <span>Detectar automaticamente onde começam os dados</span>
                     </label>
                   </div>
                   <div class="form-grid">
                     <div>
-                      <label class="label">Cabeçalho na linha</label>
+                      <label class="label">Em qual linha estão os títulos das colunas?</label>
                       <input class="input" id="headerRowNumber" type="number" min="1" value="1" />
                     </div>
                     <div>
-                      <label class="label">Base começa na coluna</label>
+                      <label class="label">Onde começam seus dados? (normalmente A)</label>
                       <input class="input" id="startColumnLetter" placeholder="A" value="A" />
                     </div>
                   </div>
-                  <div class="micro" id="layoutNote">Ajuste se existir conteúdo acima do cabeçalho.</div>
+                  <div class="micro" id="layoutNote">Se houver textos antes da tabela, ajuste aqui.</div>
+                  </div>
 
                   <div class="divider"></div>
 
-                  <p class="eyebrow">Qualidade de dados</p>
+                  <p class="eyebrow">Limpeza automática (recomendado)</p>
                   <div class="filter-chips">
-                    <label class="check-chip"><input type="checkbox" id="trimCells" checked /><span>Tirar espaços (trim)</span></label>
+                    <label class="check-chip"><input type="checkbox" id="trimCells" checked /><span>Ajustar espaços</span></label>
                     <label class="check-chip"><input type="checkbox" id="removeEmptyRows" checked /><span>Remover linhas vazias</span></label>
                     <label class="check-chip"><input type="checkbox" id="removeEmptyCols" checked /><span>Remover colunas vazias</span></label>
-                    <label class="check-chip"><input type="checkbox" id="normalizeHeaders" checked /><span>Normalizar cabeçalho</span></label>
-                    <label class="check-chip"><input type="checkbox" id="dedupeHeaders" checked /><span>Evitar cabeçalho duplicado</span></label>
-                    <label class="check-chip"><input type="checkbox" id="numberCoerce" /><span>Converter números</span></label>
-                    <label class="check-chip"><input type="checkbox" id="dateCoerce" /><span>Converter datas (dd/mm/aaaa)</span></label>
+                    <label class="check-chip"><input type="checkbox" id="normalizeHeaders" checked /><span>Padronizar títulos</span></label>
+                    
+                    
+                    
                   </div>
                 </div>
               </details>
 
-              <div class="panel-block panel-sticky-action">
+              <div class="panel-block panel-sticky-action flow-step flow-step-muted" id="flowStep4">
                 <div class="actions-grid">
                   <label class="check subtle">
                     <input type="checkbox" id="dontAskAgain" />
-                    Salvar este padrão para a aba selecionada
+                    Salvar este padrão para esta aba
                   </label>
 
-                  <button class="btn btn-primary" id="importBtn" disabled>Etapa 3 · Importar agora</button>
+                  <button class="btn btn-primary" id="importBtn" disabled>Importar dados agora</button>
+                  <p class="micro cta-sub">Se tudo estiver certo</p>
                 </div>
                 <div class="micro" id="microNote">—</div>
               </div>

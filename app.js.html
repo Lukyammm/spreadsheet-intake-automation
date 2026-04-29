@@ -1,5 +1,9 @@
 <script>
   const el = (id) => document.getElementById(id);
+  const isChecked = (id, fallback = false) => {
+    const node = el(id);
+    return node ? !!node.checked : fallback;
+  };
 
   const state = {
     boot: null,
@@ -104,6 +108,24 @@
   function setLayoutInputsEnabled(enabled){
     el("headerRowNumber").disabled = !enabled;
     el("startColumnLetter").disabled = !enabled;
+  }
+
+  
+
+  function updateStructureVisibility(){
+    const details = el("structureDetails");
+    if (!details) return;
+    details.style.display = (el("hasHeader")?.value || "yes") === "yes" ? "block" : "none";
+  }
+
+  function setFlowStep(step){
+    [["flowStep1", 1], ["flowStep2", 2], ["flowStep4", 3]].forEach(([id, idx]) => {
+      const node = el(id);
+      if (!node) return;
+      const active = step === idx;
+      node.classList.toggle("flow-step-active", active);
+      node.classList.toggle("flow-step-muted", !active);
+    });
   }
 
   function applyLayoutSuggestion(layout){
@@ -386,9 +408,9 @@
       el("removeEmptyRows").checked = !!std.removeEmptyRows;
       el("removeEmptyCols").checked = !!std.removeEmptyCols;
       el("normalizeHeaders").checked = !!std.normalizeHeaders;
-      el("dedupeHeaders").checked = !!std.dedupeHeaders;
-      el("numberCoerce").checked = !!std.numberCoerce;
-      el("dateCoerce").checked = !!std.dateCoerce;
+      if (el("dedupeHeaders")) el("dedupeHeaders").checked = !!std.dedupeHeaders;
+      if (el("numberCoerce")) el("numberCoerce").checked = !!std.numberCoerce;
+      if (el("dateCoerce")) el("dateCoerce").checked = !!std.dateCoerce;
       el("microNote").textContent = "Preferências carregadas (padronização).";
     }
     if (route){
@@ -418,9 +440,9 @@
       el("removeEmptyRows").checked = !!hit.standardize.removeEmptyRows;
       el("removeEmptyCols").checked = !!hit.standardize.removeEmptyCols;
       el("normalizeHeaders").checked = !!hit.standardize.normalizeHeaders;
-      el("dedupeHeaders").checked = !!hit.standardize.dedupeHeaders;
-      el("numberCoerce").checked = !!hit.standardize.numberCoerce;
-      el("dateCoerce").checked = !!hit.standardize.dateCoerce;
+      if (el("dedupeHeaders")) el("dedupeHeaders").checked = !!hit.standardize.dedupeHeaders;
+      if (el("numberCoerce")) el("numberCoerce").checked = !!hit.standardize.numberCoerce;
+      if (el("dateCoerce")) el("dateCoerce").checked = !!hit.standardize.dateCoerce;
     }
     if (hit.layout) {
       el("headerRowNumber").value = String(hit.layout.headerRowNumber || 1);
@@ -484,9 +506,9 @@
       removeEmptyRows: el("removeEmptyRows").checked,
       removeEmptyCols: el("removeEmptyCols").checked,
       normalizeHeaders: el("normalizeHeaders").checked,
-      dedupeHeaders: el("dedupeHeaders").checked,
-      numberCoerce: el("numberCoerce").checked,
-      dateCoerce: el("dateCoerce").checked,
+      dedupeHeaders: isChecked("dedupeHeaders"),
+      numberCoerce: isChecked("numberCoerce"),
+      dateCoerce: isChecked("dateCoerce"),
     };
   }
 
@@ -593,6 +615,7 @@
       el("importBtn").disabled = true;
       el("copyJsonBtn").disabled = true;
       setStatus("Processando upload…");
+      setFlowStep(2);
 
       const res = await ingest(file);
       state.lastIngest = res;
@@ -612,6 +635,7 @@
       renderMetrics(res);
       renderChart(res.preview);
       setStatus("Pronto para importar");
+      setFlowStep(3);
       el("importBtn").disabled = false;
       el("copyJsonBtn").disabled = false;
       el("microNote").textContent = `Detectado: ${res.suggestion?.match || "—"} • origem: ${res.meta?.sourceType}`;
@@ -638,6 +662,7 @@
     el("sheetName").onchange = () => {
       applyTargetPrefsForCurrentSelection();
     };
+    el("hasHeader").onchange = () => updateStructureVisibility();
     el("autoLayout").onchange = () => {
       const manualEnabled = !el("autoLayout").checked;
       setLayoutInputsEnabled(manualEnabled);
@@ -734,5 +759,7 @@
 
   wireDropzone();
   wireActions();
+  updateStructureVisibility();
+  setFlowStep(1);
   boot();
 </script>
