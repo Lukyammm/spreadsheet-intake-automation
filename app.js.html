@@ -15,6 +15,13 @@
   };
 
   function setStatus(txt){ el("statusPill").textContent = txt; }
+  function setInlineNote(id, message, isError = false){
+    const node = el(id);
+    if (!node) return;
+    node.textContent = message;
+    if (isError) node.setAttribute("role", "alert");
+    else node.removeAttribute("role");
+  }
 
   function showProgress(show, pct = 0, label = ""){
     const progress = el("progressWrap");
@@ -75,7 +82,10 @@
   function renderPreview(preview){
     const table = el("previewTable");
     table.innerHTML = "";
-    if (!preview || !preview.header) return;
+    if (!preview || !preview.header) {
+      table.innerHTML = '<tbody><tr><td class="table-empty">Prévia indisponível. Envie um arquivo para visualizar os dados.</td></tr></tbody>';
+      return;
+    }
 
     const thead = document.createElement("thead");
     const trh = document.createElement("tr");
@@ -299,6 +309,11 @@
       tr.appendChild(tdActions);
       tbody.appendChild(tr);
     });
+    if (!destinations?.length) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = '<td colspan="3" class="table-empty">Nenhuma planilha cadastrada. Cadastre uma planilha para continuar.</td>';
+      tbody.appendChild(tr);
+    }
 
     table.appendChild(tbody);
   }
@@ -370,6 +385,11 @@
       actionsCell.appendChild(delBtn);
       tbody.appendChild(tr);
     });
+    if (!rules?.length) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = '<td colspan="6" class="table-empty">Nenhuma regra cadastrada. Cadastre uma regra para sugerir destino automaticamente.</td>';
+      tbody.appendChild(tr);
+    }
     table.appendChild(tbody);
   }
 
@@ -654,9 +674,9 @@
       try {
         await loadSheetsForSelectedSpreadsheet();
         applyTargetPrefsForCurrentSelection();
-        el("destinationNote").textContent = `Destino selecionado: ${currentDestinationName()}`;
+        setInlineNote("destinationNote", `Destino selecionado: ${currentDestinationName()}`);
       } catch (err) {
-        el("destinationNote").textContent = `Erro ao carregar abas: ${err.message}`;
+        setInlineNote("destinationNote", `Erro ao carregar abas: ${err.message}`, true);
       }
     };
     el("sheetName").onchange = () => {
@@ -688,11 +708,11 @@
           el("spreadsheetId").value = created.spreadsheetId;
         }
         await loadSheetsForSelectedSpreadsheet();
-        el("destinationNote").textContent = "Planilha cadastrada com sucesso.";
+        setInlineNote("destinationNote", "Planilha cadastrada com sucesso.");
         el("newDestinationName").value = "";
         el("newDestinationUrl").value = "";
       } catch (err) {
-        el("destinationNote").textContent = `Erro ao salvar planilha: ${err.message}`;
+        setInlineNote("destinationNote", `Erro ao salvar planilha: ${err.message}`, true);
       }
     };
 
@@ -714,9 +734,9 @@
         state.editingRuleKey = "";
         state.boot.rules = res.rules || [];
         renderRulesTable(state.boot.rules);
-        el("rulesNote").textContent = "Regra salva com sucesso.";
+        setInlineNote("rulesNote", "Regra salva com sucesso.");
       } catch (err) {
-        el("rulesNote").textContent = `Erro ao salvar regra: ${err.message}`;
+        setInlineNote("rulesNote", `Erro ao salvar regra: ${err.message}`, true);
       }
     };
 

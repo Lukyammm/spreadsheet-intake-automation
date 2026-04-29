@@ -30,8 +30,8 @@
           <section class="card drop" id="dropzone">
             <div class="dropInner">
               <div class="dropIcon">⇪</div>
-              <h2 class="dropTitle">Arraste sua planilha aqui</h2>
-              <p class="dropHint">Formatos aceitos: CSV, XLS ou XLSX.</p>
+              <h2 class="dropTitle">1) Envie o arquivo da operação</h2>
+              <p class="dropHint">Formatos aceitos: CSV, XLS ou XLSX. Após enviar, revise a prévia e importe.</p>
               <div class="row">
                 <button class="btn btn-secondary" id="pickBtn">Escolher arquivo</button>
                 <input type="file" id="fileInput" accept=".csv,.xls,.xlsx" hidden />
@@ -49,8 +49,8 @@
             <div class="section-header">
               <div>
                 <p class="eyebrow">Configuração</p>
-                <h2 class="section-title">Importação guiada</h2>
-                <p class="section-sub">Menos termos técnicos, mais clareza para importar sem erro.</p>
+                <h2 class="section-title">2) Configure destino e regras</h2>
+                <p class="section-sub">Preencha os campos abaixo e siga a próxima ação indicada em cada etapa.</p>
               </div>
               <span class="badge" id="matchBadge">—</span>
             </div>
@@ -58,7 +58,7 @@
             <div class="panel-stack">
               <div class="panel-block flow-step flow-step-active" id="flowStep1">
                 <p class="eyebrow">Etapa 1 · Destino</p>
-                <h3 class="section-title section-title-sm">Para onde vão os dados?</h3>
+                <h3 class="section-title section-title-sm">Escolha o destino da importação</h3>
                 <div class="form-grid">
                   <div>
                     <label class="label">Planilha destino</label>
@@ -194,7 +194,7 @@
                   </label>
 
                   <button class="btn btn-primary" id="importBtn" disabled>Importar dados agora</button>
-                  <p class="micro cta-sub">Se tudo estiver certo</p>
+                  <p class="micro cta-sub">3) Clique em importar quando a prévia estiver correta</p>
                 </div>
                 <div class="micro" id="microNote">—</div>
               </div>
