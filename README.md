@@ -28,15 +28,18 @@ This project was developed to solve real operational problems using web technolo
 
 The goal of this project is to improve operational efficiency, reduce manual work, and support better decision-making through automation and clear data visualization.
 
+
+
+
 ## Guia visual do sistema
 
-> Mockups demonstrativos do sistema, com dados ficticios e sem informacoes reais de pacientes ou da instituicao.
+> Telas demonstrativas baseadas nos componentes, textos, cores e fluxos encontrados no código deste repositório. Os dados exibidos são fictícios e não representam pacientes, profissionais ou instituições reais.
 
-### Sheets Automation - visao geral
-![Sheets Automation - visao geral](./docs/screenshots/overview.svg)
+### Sheet Intake - upload e regras
+![Sheet Intake - upload e regras](./docs/screenshots/intake-upload.svg)
 
-### Sheets Automation - fluxo operacional
-![Sheets Automation - fluxo operacional](./docs/screenshots/workflow.svg)
+### Sheet Intake - fluxo de importação
+![Sheet Intake - fluxo de importação](./docs/screenshots/import-flow.svg)
 
 ## Status
 
